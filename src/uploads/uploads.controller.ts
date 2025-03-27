@@ -97,28 +97,28 @@ export class UploadsController {
     }
   }
 
-  @Post('large-video')
-  @UseInterceptors(FileInterceptor('file'))
-  uploadFile(@UploadedFile() file: Express.Multer.File): Observable<any> {
-    return new Observable((observer) => {
-      const form = new formidable.IncomingForm();
-
-      // Set limits for the file upload, like max file size
-      form.maxFileSize = 500 * 1024 * 1024; // 500MB (Adjust this based on your needs)
-
-      form.parse(file, (err, fields, files) => {
-        if (err) {
-          observer.error(err);
-          return {};
-        }
-        // Handle the file here
-        console.log('Uploaded file:', files);
-        observer.next({
-          message: 'File uploaded successfully!',
-          files,
-        });
-        observer.complete();
-      });
-    });
-  }
+  // @Post('large-video')
+  // @UseInterceptors(FileInterceptor('file'))
+  // uploadFile(@UploadedFile() file: Express.Multer.File): Observable<any> {
+  //   return new Observable((observer) => {
+  //     const form = new formidable.IncomingForm();
+  //
+  //     // Set limits for the file upload, like max file size
+  //     form.maxFileSize = 500 * 1024 * 1024; // 500MB (Adjust this based on your needs)
+  //
+  //     form.parse(file, (err, fields, files) => {
+  //       if (err) {
+  //         observer.error(err);
+  //         return {};
+  //       }
+  //       // Handle the file here
+  //       console.log('Uploaded file:', files);
+  //       observer.next({
+  //         message: 'File uploaded successfully!',
+  //         files,
+  //       });
+  //       observer.complete();
+  //     });
+  //   });
+  // }
 }
