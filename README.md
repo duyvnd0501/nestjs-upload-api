@@ -58,8 +58,8 @@ $ npm run test:cov
 ```
 
 ## Testing the API
-# For Image File
+### For Image File
 curl -X POST -F "file=@your-image-file.png" http://localhost:3000/upload/image
-# For Video File
+### For Video File
 curl -X POST -F "file=@your-video-file.mov" http://localhost:3000/upload/video
 
