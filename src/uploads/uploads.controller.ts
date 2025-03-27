@@ -7,8 +7,6 @@ import {
   ParseFilePipe,
   MaxFileSizeValidator,
   FileTypeValidator,
-  HttpException,
-  HttpStatus,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { S3Service } from '../services/s3/s3.service';
@@ -17,7 +15,7 @@ import { ImageAnalysisService } from '../services/image-analysis/image-analysis.
 import * as path from 'path';
 import { rmSync } from 'fs';
 import * as formidable from 'formidable';
-import { Observable, of } from 'rxjs';
+import { Observable } from 'rxjs';
 
 @Controller('upload')
 export class UploadsController {
@@ -96,29 +94,52 @@ export class UploadsController {
       return { exposureTime: null };
     }
   }
+  // This action for testing upload large file
+  @Post('large-video')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadFile(@UploadedFile() file: Express.Multer.File): Observable<any> {
+    return new Observable((observer) => {
+      const form = new formidable.IncomingForm();
 
-  // @Post('large-video')
-  // @UseInterceptors(FileInterceptor('file'))
-  // uploadFile(@UploadedFile() file: Express.Multer.File): Observable<any> {
-  //   return new Observable((observer) => {
-  //     const form = new formidable.IncomingForm();
-  //
-  //     // Set limits for the file upload, like max file size
-  //     form.maxFileSize = 500 * 1024 * 1024; // 500MB (Adjust this based on your needs)
-  //
-  //     form.parse(file, (err, fields, files) => {
-  //       if (err) {
-  //         observer.error(err);
-  //         return {};
-  //       }
-  //       // Handle the file here
-  //       console.log('Uploaded file:', files);
-  //       observer.next({
-  //         message: 'File uploaded successfully!',
-  //         files,
-  //       });
-  //       observer.complete();
-  //     });
-  //   });
-  // }
+      // Set limits for the file upload, like max file size
+      form.maxFileSize = 500 * 1024 * 1024; // 500MB (Adjust this based on your needs)
+
+      form.parse(file, async (err, fields, files) => {
+        if (err) {
+          observer.error(err);
+          return {};
+        }
+        // Handle the file here
+        console.log('Uploaded file:', files);
+        const fileName = Date.now() + file.originalname;
+        const frames = await this.videoProcessingService.uploadVideo(
+          file,
+          fileName,
+        );
+        console.log(frames);
+        const frameFolder = './uploads/' + fileName;
+        // Upload image to S3
+        await Promise.all(
+          frames.map((frame) => {
+            this.s3Service.uploadFile(frameFolder + '/' + frame, frame);
+          }),
+        );
+        // Assume analyze the frames, then sum exposure times.
+        const exposureResults = await Promise.all(
+          frames.map((frame) => this.imageAnalysisService.analyzeBrand(frame)),
+        );
+        rmSync(frameFolder, { recursive: true, force: true }); // Remove local frames folder after processing
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const totalExposureTime = exposureResults.reduce(
+          (sum, result) => sum + result.exposureTime,
+          0,
+        );
+        observer.next({
+          message: 'File uploaded successfully!',
+          exposureTime: totalExposureTime,
+        });
+        observer.complete();
+      });
+    });
+  }
 }
