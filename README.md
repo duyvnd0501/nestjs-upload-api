@@ -58,8 +58,20 @@ $ npm run test:cov
 ```
 
 ## Testing the API
+Once the server is running, you can test the image and video upload using Postman or curl.
+#### Final Thoughts:
+Handling Large Files: Using Formidable for video uploads ensures that large video files are handled correctly.
+
+S3 Storage: Storing files in S3 allows scalability and better management of your media assets.
+
+Mock OpenAI API: The mock OpenAI API simulates brand detection. In a real scenario, you'd replace it with a real API (e.g., OpenAI’s vision models).
+
 ### For Image File
 curl -X POST -F "file=@your-image-file.png" http://localhost:3000/upload/image
+
 ### For Video File
 curl -X POST -F "file=@your-video-file.mov" http://localhost:3000/upload/video
+
+### For Large Video File
+curl -X POST -F "file=@your-large-video-file.mov" http://localhost:3000/upload/large-video
 

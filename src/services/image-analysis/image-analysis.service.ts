@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import fs from 'fs';
 
 @Injectable()
 export class ImageAnalysisService {
   // Simulate an image analysis API (OpenAI-like)
   async analyzeBrand(imagePath: string): Promise<any> {
     try {
-      const fileContent = fs.readFileSync(imagePath);
+      console.log(imagePath);
+      // const fileContent = fs.readFileSync(imagePath);
       // Simulating an image file content analysis request to a mock OpenAI API.
       // const response = await axios.post('https://api.mockopenai.com/analyze', {
       //   image: fileContent,
@@ -23,7 +23,7 @@ export class ImageAnalysisService {
       });
     } catch (e) {
       console.log("Error analyzeBrand", e);
-      throw new Error('Failed to process video frames');
+      throw new Error('Failed to analyzeBrand image');
     }
   }
 }

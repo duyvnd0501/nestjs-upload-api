@@ -6,7 +6,7 @@ import {
   UseInterceptors,
   ParseFilePipe,
   MaxFileSizeValidator,
-  FileTypeValidator,
+  FileTypeValidator, Req, Res,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { S3Service } from '../services/s3/s3.service';
@@ -14,9 +14,10 @@ import { VideoProcessingService } from '../services/video-processing/video-proce
 import { ImageAnalysisService } from '../services/image-analysis/image-analysis.service';
 import * as path from 'path';
 import { rmSync, unlinkSync } from 'fs';
-import * as formidable from 'formidable';
+import formidable from 'formidable';
 import { Observable } from 'rxjs';
 import { diskStorage } from 'multer';
+import { Request, Response } from 'express';
 
 @Controller('upload')
 export class UploadsController {
@@ -64,7 +65,7 @@ export class UploadsController {
       analysisResult,
     };
   }
-
+  // This action for testing upload normal video file
   @Post('video')
   @UseInterceptors(FileInterceptor('file'))
   async uploadVideo(
@@ -87,7 +88,9 @@ export class UploadsController {
       );
       // Assume analyze the frames, then sum exposure times.
       const exposureResults = await Promise.all(
-        frames.map((frame) => this.imageAnalysisService.analyzeBrand(frame)),
+        frames.map((frame) =>
+          this.imageAnalysisService.analyzeBrand(frameFolder + '/' + frame),
+        ),
       );
       rmSync(frameFolder, { recursive: true, force: true }); // Remove local frames folder after processing
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -104,50 +107,64 @@ export class UploadsController {
   }
   // This action for testing upload large file
   @Post('large-video')
-  @UseInterceptors(FileInterceptor('file'))
-  uploadFile(@UploadedFile() file: Express.Multer.File): Observable<any> {
-    return new Observable((observer) => {
-      const form = new formidable.IncomingForm();
-
-      // Set limits for the file upload, like max file size
-      form.maxFileSize = 500 * 1024 * 1024; // 500MB (Adjust this based on your needs)
-
-      form.parse(file, async (err, fields, files) => {
-        if (err) {
-          observer.error(err);
-          return {};
-        }
-        // Handle the file here
-        console.log('Uploaded file:', files);
-        const fileName = Date.now() + file.originalname;
-        const frames = await this.videoProcessingService.uploadVideo(
-          file,
-          fileName,
-        );
-        console.log(frames);
-        const frameFolder = './uploads/' + fileName;
-        // Upload image to S3
-        await Promise.all(
-          frames.map((frame) => {
-            this.s3Service.uploadFile(frameFolder + '/' + frame, frame);
-          }),
-        );
-        // Assume analyze the frames, then sum exposure times.
-        const exposureResults = await Promise.all(
-          frames.map((frame) => this.imageAnalysisService.analyzeBrand(frame)),
-        );
-        rmSync(frameFolder, { recursive: true, force: true }); // Remove local frames folder after processing
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const totalExposureTime = exposureResults.reduce(
-          (sum, result) => sum + result.exposureTime,
-          0,
-        );
-        observer.next({
-          message: 'File uploaded successfully!',
-          exposureTime: totalExposureTime,
-        });
-        observer.complete();
+  uploadFile(@Req() req: Request, @Res() res: Response) {
+    let frameFolder = './uploads';
+    try {
+      const form = formidable({
+        uploadDir: './uploads', // Temporary directory for uploads
+        keepExtensions: true,
+        maxTotalFileSize: 15 * 1024 * 1024 * 1024,
+        // filename: true,
       });
-    });
+
+      form.parse(req, (err, fields, files) => {
+        if (err) {
+          rmSync(frameFolder, { recursive: true, force: true }); // Remove local frames folder after processing
+          console.log(err);
+          res.status(400).json({
+            message: 'Error during file upload',
+            error: err,
+          });
+          return;
+        }
+
+        const file: any = files.file || [];
+        let totalExposureTime = 0;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access
+        file.map(async (f) => {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+          frameFolder = './uploads/fr_' + f.newFilename;
+          const frames = await this.videoProcessingService.readAndSplitVideo(
+            f.filepath,
+            frameFolder,
+          );
+          console.log('frames:', frames);
+          // Upload image to S3
+          await Promise.all(
+            frames.map((frame) => {
+              this.s3Service.uploadFile(frameFolder + '/' + frame, frame);
+            }),
+          );
+          // Assume analyze the frames, then sum exposure times.
+          const exposureResults = await Promise.all(
+            frames.map((frame) =>
+              this.imageAnalysisService.analyzeBrand(frameFolder + '/' + frame),
+            ),
+          );
+          rmSync(frameFolder, { recursive: true, force: true }); // Remove local frames folder after processing
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          totalExposureTime = exposureResults.reduce(
+            (sum, result) => sum + result.exposureTime,
+            0,
+          );
+        });
+        // Respond with a success message
+        res.status(200).json({ totalExposureTime });
+      });
+    } catch (e) {
+      console.log(e);
+      rmSync(frameFolder, { recursive: true, force: true }); // Remove local frames folder after processing
+      res.status(200).json({ totalExposureTime: 0 });
+    }
   }
 }

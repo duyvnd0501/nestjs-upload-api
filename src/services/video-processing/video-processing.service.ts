@@ -28,11 +28,21 @@ export class VideoProcessingService {
       throw new Error('Failed to process video frames');
     }
   }
+  async readAndSplitVideo(videoPath: string, frameFolder: string) {
+    try {
+      await this.splitVideo(videoPath, frameFolder);
+      const frameFiles = fs.readdirSync(frameFolder);
+      unlinkSync(videoPath); // Remove local video file after processing
+      return frameFiles;
+    } catch (error) {
+      console.log(error);
+      throw new Error('Failed to process video frames');
+    }
+  }
 
   async splitVideo(videoPath: string, frameFolder: string) {
     try {
       await fsPromises.mkdir(frameFolder, { recursive: true });
-      console.log(videoPath);
       return new Promise((resolve, reject) => {
         const frames: string[] = [];
         ffmpeg(videoPath)
