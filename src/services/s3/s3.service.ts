@@ -17,7 +17,7 @@ export class S3Service {
   // Upload a file to S3
   async uploadFile(filePath: string, fileName: string): Promise<string> {
     const fileContent = fs.readFileSync(filePath);
-    return 'true';
+    // return 'true';
     const params = {
       Bucket: process.env.S3_BUCKET_NAME || '',
       Key: fileName,

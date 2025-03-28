@@ -13,9 +13,10 @@ import { S3Service } from '../services/s3/s3.service';
 import { VideoProcessingService } from '../services/video-processing/video-processing.service';
 import { ImageAnalysisService } from '../services/image-analysis/image-analysis.service';
 import * as path from 'path';
-import { rmSync } from 'fs';
+import { rmSync, unlinkSync } from 'fs';
 import * as formidable from 'formidable';
 import { Observable } from 'rxjs';
+import { diskStorage } from 'multer';
 
 @Controller('upload')
 export class UploadsController {
@@ -30,7 +31,16 @@ export class UploadsController {
   }
 
   @Post('image')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './uploads',
+        filename: (req, file, callback) => {
+          callback(null, Date.now() + file.originalname);
+        },
+      }),
+    }),
+  )
   async uploadImage(
     @UploadedFile(
       new ParseFilePipe({
@@ -43,13 +53,11 @@ export class UploadsController {
     file: Express.Multer.File,
   ) {
     // Upload image to S3
-    console.log(file, 'file');
-    const filePath = path.resolve(__dirname, file.originalname);
-    const fileName = `${Date.now()}_${file.originalname}`;
-    const s3Url = await this.s3Service.uploadFile(filePath, fileName);
+    const filePath = path.resolve('./uploads', file.filename);
+    const s3Url = await this.s3Service.uploadFile(filePath, file.filename);
     // Simulate image analysis
     const analysisResult : any = await this.imageAnalysisService.analyzeBrand(filePath);
-
+    unlinkSync(filePath); // Remove local file after processing
     return {
       message: 'Image uploaded and analyzed successfully',
       s3Url,
