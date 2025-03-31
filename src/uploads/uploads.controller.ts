@@ -6,7 +6,9 @@ import {
   UseInterceptors,
   ParseFilePipe,
   MaxFileSizeValidator,
-  FileTypeValidator, Req, Res,
+  FileTypeValidator,
+  Req,
+  Res,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { S3Service } from '../services/s3/s3.service';
@@ -15,9 +17,9 @@ import { ImageAnalysisService } from '../services/image-analysis/image-analysis.
 import * as path from 'path';
 import { rmSync, unlinkSync } from 'fs';
 import formidable from 'formidable';
-import { Observable } from 'rxjs';
 import { diskStorage } from 'multer';
 import { Request, Response } from 'express';
+import { MediaQueueService } from '../queues/media-queue/media-queue.service';
 
 @Controller('upload')
 export class UploadsController {
@@ -25,7 +27,9 @@ export class UploadsController {
     private s3Service: S3Service,
     private videoProcessingService: VideoProcessingService,
     private imageAnalysisService: ImageAnalysisService,
+    private mediaQueueService: MediaQueueService,
   ) {}
+
   @Get()
   getHello(): string {
     return 'This is upload controller';
@@ -57,7 +61,8 @@ export class UploadsController {
     const filePath = path.resolve('./uploads', file.filename);
     const s3Url = await this.s3Service.uploadFile(filePath, file.filename);
     // Simulate image analysis
-    const analysisResult : any = await this.imageAnalysisService.analyzeBrand(filePath);
+    const analysisResult: any =
+      await this.imageAnalysisService.analyzeBrand(filePath);
     unlinkSync(filePath); // Remove local file after processing
     return {
       message: 'Image uploaded and analyzed successfully',
@@ -65,6 +70,7 @@ export class UploadsController {
       analysisResult,
     };
   }
+
   // This action for testing upload normal video file
   @Post('video')
   @UseInterceptors(FileInterceptor('file'))
@@ -105,6 +111,7 @@ export class UploadsController {
       return { exposureTime: null };
     }
   }
+
   // This action for testing upload large file
   @Post('large-video')
   uploadFile(@Req() req: Request, @Res() res: Response) {
@@ -165,6 +172,52 @@ export class UploadsController {
       console.log(e);
       rmSync(frameFolder, { recursive: true, force: true }); // Remove local frames folder after processing
       res.status(200).json({ totalExposureTime: 0 });
+    }
+  }
+
+  @Post('receive-file')
+  receiveFile(@Req() req: Request, @Res() res: Response) {
+    try {
+      const form = formidable({
+        uploadDir: './uploads', // Temporary directory for uploads
+        keepExtensions: true,
+        maxTotalFileSize: 15 * 1024 * 1024 * 1024,
+        // filename: true,
+      });
+      form.parse(req, (err, fields, files) => {
+        if (err) {
+          console.log(err);
+          res.status(400).json({
+            message: 'Error during file upload',
+            error: err,
+          });
+          return;
+        }
+
+        const file: any = files.file || [];
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access
+        file.map(async (f) => {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+          const mimeType:string = f.mimetype; // Detect file type
+          // Check file type (image or video)
+          const fileType = mimeType.startsWith('image/')
+            ? 'IMAGE'
+            : mimeType.startsWith('video/')
+              ? 'VIDEO'
+              : 'Unknown';
+          console.log('mimeType:', mimeType, fileType);
+          await this.mediaQueueService.addToQueue({
+            filePath: f.filepath,
+            fileName: f.newFilename,
+            type: fileType,
+          });
+        });
+        // Respond with a success message
+        res.status(200).json({ success: true });
+      });
+    } catch (e) {
+      console.log(e);
+      res.status(200).json({ success: false });
     }
   }
 }

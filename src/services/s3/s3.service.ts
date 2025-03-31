@@ -24,7 +24,7 @@ export class S3Service {
       Body: fileContent,
       ContentType: 'application/octet-stream',
     };
-    // return 'true';
+    return 'true';
     const uploadResult = await this.s3.upload(params).promise();
     return uploadResult.Location; // URL of the uploaded file
   }
