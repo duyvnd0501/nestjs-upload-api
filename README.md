@@ -68,3 +68,6 @@ Mock OpenAI API: The mock OpenAI API simulates brand detection. In a real scenar
 
 ### For Image / Video File
 curl -X POST -F "file=@your-image-file.png" http://localhost:3000/upload/media
+
+### an architecture diagram for a scalable system.
+Please locate file [Architecture solution.pdf](Architecture%20solution.pdf)
