@@ -1,7 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import * as console from 'node:console';
-import { rmSync } from 'fs';
+import { rmSync, unlinkSync } from 'fs';
 import { S3Service } from '../../services/s3/s3.service';
 import { VideoProcessingService } from '../../services/video-processing/video-processing.service';
 import { ImageAnalysisService } from '../../services/image-analysis/image-analysis.service';
@@ -39,20 +39,27 @@ export class MediaProcessor extends WorkerHost {
             this.imageAnalysisService.analyzeBrand(frameFolder + '/' + frame),
           ),
         );
-        // rmSync(frameFolder, { recursive: true, force: true }); // Remove local frames folder after processing
+        rmSync(frameFolder, { recursive: true, force: true }); // Remove local frames folder after processing
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const totalExposureTime = exposureResults.reduce(
           (sum, result) => sum + result.exposureTime,
           0,
         );
-        return Promise.resolve({ totalExposureTime });
+        // Store DB the total exposure time
+        console.log('totalExposureTime: ', totalExposureTime);
       } else if (type === 'IMAGE') {
         // Upload image to S3
         await this.s3Service.uploadFile(filePath, fileName);
         // Assume analyze the frames, then sum exposure times.
-        await this.imageAnalysisService.analyzeBrand(filePath);
+        const totalExposureTime =
+          await this.imageAnalysisService.analyzeBrand(filePath);
+        console.log(totalExposureTime);
+        // Remove local image file after processing
+        unlinkSync(filePath);
+        // Store DB the total exposure time
+        console.log('totalExposureTime: ', totalExposureTime);
       } else {
-        console.log('e');
+        console.log('FILE TYPE IS INVALID.');
       }
     } catch (e) {
       console.log(e);
